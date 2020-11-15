@@ -113,18 +113,34 @@ chat_page(_Request) :-
 
 chat_page -->
 	style,
-	html([ h1('YAWSBCR: Yet Another ...'),
-	       div([ id(chat)
-		   ], []),
-	       input([ placeholder('Type a message and hit RETURN'),
+	html([
+	       div(class('game-table'),
+		   div([ id(chat),
+		     class(boxed)
+		   ], [])
+	       ),
+	       div(class('roll-area'), [
+	       div(class(diesettings), [
+		   div([
+		       label(for(pool), 'Die Pool'),
+		       label(for(hunger), 'Hunger')
+		   ]),
+		   div(class('little-numbers'), [
+		       input([ id(pool), type(number), value(1), min(0), max(20)], []),
+		       input([ id(hunger), type(number), value(1), min(0), max(20)], [])
+		   ])
+	       ]),
+	       input([ placeholder('Set dice numbers, type in die roll reason and hit RETURN'),
 		       id(input),
+		       class([boxed]),
 		       onkeypress('handleInput(event)')
 		     ], [])
+	       ])
 	     ]),
 	script.
 
 %%	style//
-%
+%(
 %	Emit the style sheet. Typically, this  comes from a static file.
 %	We generate it inline  here  to   keep  everything  in one file.
 %	Second best would be to use a   quasi quotation, but the library
@@ -133,10 +149,18 @@ chat_page -->
 
 style -->
 	html(style([ 'body,html { height:100%; overflow: hidden; }\n',
-		     '#chat { height: calc(100% - 150px); overflow-y:scroll; \c
-			      border: solid 1px black; padding:5px; }\n',
-		     '#input { width:100%; border:solid 1px black; \c
-			       padding: 5px; box-sizing: border-box; }\n'
+		     '#chat { height: calc(100% - 150px); overflow-y:scroll; }\n',
+		     '#input { width:calc(100% - 180px); \c
+			       box-sizing: border-box;
+			       float: right;
+			       height: 48px; }\n',
+		     '.boxed {  padding: 5px; \c
+				margin: 5px; \c
+				border-radius: 5px;\c
+				border: solid 1px black; padding:5px; }\n',
+		     '.diesettings { float: left; }\n',
+		     '.diesettings input[type=number] { width: 60px; }\n',
+		     '.diesettings label:last-child { float: right; }\n'
 		   ])).
 
 %%	script//
@@ -152,7 +176,10 @@ function handleInput(e) {
   if ( !e ) e = window.event;  // IE
   if ( e.keyCode == 13 ) {
     var msg = document.getElementById("input").value;
-    sendChat(msg);
+    var pool = document.getElementById("pool").value;
+    var hunger = document.getElementById("hunger").value;
+
+    sendChat(JSON.stringify({pool:pool, hunger:hunger, reason:msg}));
     document.getElementById("input").value = "";
   }
 }
@@ -170,7 +197,8 @@ function openWebSocket() {
   connection.onmessage = function (e) {
     var chat = document.getElementById("chat");
     var msg = document.createElement("div");
-    msg.appendChild(document.createTextNode(e.data));
+    var payload = JSON.parse(e.data);
+    msg.innerHTML = payload.html;
     var child = chat.appendChild(msg);
     child.scrollIntoView(false);
   };
@@ -217,10 +245,20 @@ chatroom(Room) :-
 	handle_message(Message, Room),
 	chatroom(Room).
 
+:- use_module(library(http/json)).
+
 handle_message(Message, Room) :-
 	websocket{opcode:text} :< Message, !,
-	assertz(utterance(Message)),
-	hub_broadcast(Room.name, Message).
+	debug(chat, '~w', [Message]),
+	atom_json_dict(Message.data, Dict, []),
+	debug(chat, 'dict is ~w', [Dict]),
+	number_string(PoolCount, Dict.pool),
+	number_string(HungerCount, Dict.hunger),
+	roll_dice(PoolCount, HungerCount, Result),
+	dice_roll_html(Result, Dict.reason, HTML),
+	assertz(utterance(HTML)),
+	atom_json_dict(NewData, Dict.put(_{html:HTML}), []),
+	hub_broadcast(Room.name, Message.put(_{data: NewData})).
 handle_message(Message, _Room) :-
 	hub{joined:Id} :< Message, !,
 	assertz(visitor(Id)),
@@ -231,3 +269,86 @@ handle_message(Message, _Room) :-
 	retractall(visitor(Id)).
 handle_message(Message, _Room) :-
 	debug(chat, 'Ignoring message ~p', [Message]).
+
+dice_roll_html(Rolls, Reason, HTML) :-
+	rolls_termerized_html(Rolls, Reason, TERM),
+	phrase(html(TERM), TOKEN),
+	delete(TOKEN, nl(_), NNLTOKEN),
+	with_output_to(string(HTML),
+		       print_html(NNLTOKEN)
+		      ).
+
+rolls_termerized_html(Rolls, Reason, div([
+				 div(class(reason), Reason),
+				 div(class(dice), RollImages)
+				     ])) :-
+	maplist(roll_roll_image, Rolls, RollImages).
+
+:- table roll_roll_image/2.
+
+roll_roll_image(ImageName, img(src(ImageURI), [])) :-
+	format(atom(ImageURI), 'https://partyserver.rocks/anniepoo/diceroller/~w', [ImageName]).
+
+roll_dice(Pool, Hunger, Result) :-
+	length(PoolRolls, Pool),
+	poolsides(PoolSides),
+	maplist({PoolSides}/[Roll]>>random_member(Roll, PoolSides), PoolRolls),
+	length(HungerRolls, Hunger),
+	hungersides(HungerSides),
+	maplist({HungerSides}/[Roll]>>random_member(Roll, HungerSides), HungerRolls),
+	append(PoolRolls, HungerRolls, Result).
+
+poolsides([
+    'bestial-fail.png',
+    'normal-fail.png',
+    'normal-fail.png',
+    'normal-fail.png',
+    'normal-fail.png',
+    'normal-success.png',
+    'normal-success.png',
+    'normal-success.png',
+    'normal-success.png',
+    'normal-crit.png'
+]).
+hungersides([
+    'red-fail.png',
+    'red-fail.png',
+    'red-fail.png',
+    'red-fail.png',
+    'red-fail.png',
+    'red-success.png',
+    'red-success.png',
+    'red-success.png',
+    'red-success.png',
+    'red-crit.png'
+]).
+
+
+
+/*
+ *
+ *
+M] DaniQuietNow: up to 5 hunger dice red one with the following symbols:
+1. Scull with fangs
+2. Empty side
+3. Empty side
+4. Empty side
+5. Empty side
+6. Dager
+7.Dager
+8. Dager
+9. Dager
+10. Dager with Fangs.
+
+Up to 20 normal (black) dice with the following symbols:
+1. EMpty Side
+2. Empty side
+3. Empty side
+4. Empty side
+5. Empty side
+6. Dager
+7.Dager
+8. Dager
+9. Dager
+10. Dager with stars.
+      */
