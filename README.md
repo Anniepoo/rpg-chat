@@ -1,4 +1,14 @@
-# SWI-Prolog based chat server
+# SWI-Prolog based Vampire the Masquerade dice roller
+
+This project forked from JanWielemaker's swi-chat.
+
+It provides a collaborative dice rolling environment. Current implementation is optimized
+for "Vampire the Masquerade" game.
+
+
+Note that I was a little lazy, it depends on partyserver.rocks serving the images.
+
+## Running
 
 This repository provides a demonstration for   using  the recently added
 websocket support for realising a  chat  server.   To  use  it, you must
@@ -31,3 +41,5 @@ start the server:
 The chatserver itself is really simple.   Tested with the server running
 on Linux using firefox and chromium as clients. Anne Ogborn confirmed it
 also works using Windows 7 as server and IE 11.0 as client.
+
+
