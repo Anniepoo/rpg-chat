@@ -120,23 +120,23 @@ chat_page -->
 		   ], [])
 	       ),
 	       div(class('roll-area'), [
-	       div(class(diesettings), [
-		   div([
-		       label(for(pool), 'Die Pool'),
-		       label(for(hunger), 'Hunger')
-		   ]),
-		   div(class('little-numbers'), [
-		       input([ id(pool), type(number), value(1), min(0), max(20)], []),
-		       input([ id(hunger), type(number), value(1), min(0), max(20)], [])
+		       div(class(diesettings), [
+			       div([
+				   label(for(pool), 'Die Pool'),
+				   label(for(hunger), 'Hunger')
+			       ]),
+			       div(class('little-numbers'), [
+				       input([ id(pool), type(number), value(1), min(0), max(20)], []),
+				       input([ id(hunger), type(number), value(1), min(0), max(20)], [])
+				   ])
+			   ]),
+		       input([ placeholder('Set dice numbers, type in die roll reason and hit RETURN'),
+			       id(input),
+			       class([boxed]),
+			       onkeypress('handleInput(event)')
+			     ], [])
 		   ])
-	       ]),
-	       input([ placeholder('Set dice numbers, type in die roll reason and hit RETURN'),
-		       id(input),
-		       class([boxed]),
-		       onkeypress('handleInput(event)')
-		     ], [])
-	       ])
-	     ]),
+	]),
 	script.
 
 %%	style//
@@ -149,11 +149,13 @@ chat_page -->
 
 style -->
 	html(style([ 'body,html { height:100%; overflow: hidden; }\n',
-		     '#chat { height: calc(100% - 150px); overflow-y:scroll; }\n',
-		     '#input { width:calc(100% - 180px); \c
-			       box-sizing: border-box;
-			       float: right;
-			       height: 48px; }\n',
+		     '* { box-sizing: border-box; }\n',
+		     '.game-table {  height: 100%; width: calc(50% - 12px); float: left; }\n',
+		     '.roll-area { width: calc(50% - 12px); float: right; }\n',
+		     '#chat { height: 100%; overflow-y:scroll; }\n',
+		     '#input { width: 100%; \c
+			       overflow-y: scroll;
+			       float: right; }\n',
 		     '.boxed {  padding: 5px; \c
 				margin: 5px; \c
 				border-radius: 5px;\c
