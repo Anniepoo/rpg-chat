@@ -119,25 +119,57 @@ chat_page -->
 		     class(boxed)
 		   ], [])
 	       ),
-	       div(class('roll-area'), [
-		       div(class(diesettings), [
-			       div([
-				   label(for(pool), 'Die Pool'),
-				   label(for(hunger), 'Hunger')
-			       ]),
-			       div(class('little-numbers'), [
-				       input([ id(pool), type(number), value(1), min(0), max(20)], []),
-				       input([ id(hunger), type(number), value(1), min(0), max(20)], [])
-				   ])
-			   ]),
-		       input([ placeholder('Set dice numbers, type in die roll reason and hit RETURN'),
-			       id(input),
-			       class([boxed]),
-			       onkeypress('handleInput(event)')
-			     ], [])
-		   ])
+	       \roll_area
 	]),
 	script.
+
+
+roll_area -->
+	html(
+	       div(class('roll-area'), [
+		       div([id('char-area'), class(boxed)], [
+			       label(for(hunger), 'Hunger Dice'),
+			       input([ class(diceset), id(hunger), type(number), value(1), min(0), max(20)], []),
+			       input([ id('char-name'), type(text), placeholder('Character name')], [])
+			   ]),
+		       \dierollers(1/6)
+		   ])
+	).
+
+
+dierollers(N/N) -->
+	html(
+	    div(class([diesettings, divided]), [
+		    input([ placeholder('Reason for roll (eg. knife attack)'),
+			    class([boxed, reason]),
+			    'data-index'(N),
+			    id(reason+N)
+			  ], []),
+		    label(for(pool+N), 'Die Pool'),
+		    input([ id(pool+N), class([pool, diceset]), type(number), 'data-index'(N), value(N), min(0), max(20)], []),
+		    input([ type(button), name(roll),  'data-index'(N), value('Roll'), onclick('handleInput(event)')], [])
+		])
+	).
+dierollers(N/M) -->
+	{ N < M},
+	dierollers(N/N),
+	{ succ(N, NN) },
+	dierollers(NN/M).
+
+
+/*
+ * <button data-taco="7" onclick="myFunction(event)">Click me</button>
+
+<p id="demo"></p>
+
+<script>
+function myFunction(e) {
+  document.getElementById("demo").innerHTML = 3 +
+  parseInt(e.target.attributes['data-index'].value); } </script>
+
+*/
+
+
 
 %%	style//
 %(
@@ -148,21 +180,36 @@ chat_page -->
 %	contains few special characters, this is bearable.
 
 style -->
-	html(style([ 'body,html { height:100%; overflow: hidden; }\n',
-		     '* { box-sizing: border-box; }\n',
+	html(style([
+		 '@import url(\'https://fonts.googleapis.com/css2?family=Eagle+Lake&display=swap\');\n',
+'body {
+    background-image: url(https://partyserver.rocks/anniepoo/diceroller/background.jpg);\c
+    background-size: 100% 100%;\c
+}\n',
+
+		 'body,html { height:100%; overflow: hidden; }\n',
+		     '* { box-sizing: border-box;\c
+			font-family: \'Eagle Lake\', cursive;\c
+			font-size: 13pt;
+			color: #880000; }\n',
+		 'input { background-color: #888888; border: none; }\n',
 		     '.game-table {  height: 100%; width: calc(50% - 12px); float: left; }\n',
 		     '.roll-area { width: calc(50% - 12px); float: right; }\n',
 		     '#chat { height: 100%; overflow-y:scroll; }\n',
 		     '#input { width: 100%; \c
 			       overflow-y: scroll;
 			       float: right; }\n',
+		     '.divided {  padding: 5px; \c
+				margin: 5px; \c
+				border-bottom: solid 2px black; }\n',
 		     '.boxed {  padding: 5px; \c
 				margin: 5px; \c
-				border-radius: 5px;\c
-				border: solid 1px black; padding:5px; }\n',
+				}\n',
 		     '.diesettings { float: left; }\n',
-		     '.diesettings input[type=number] { width: 60px; }\n',
-		     '.diesettings label:last-child { float: right; }\n'
+		     '#hunger, .diesettings input[type=number] { width: 60px; margin: 0 8px 0 8px;\c
+							       border-radius: 4px; }\n',
+		     '.diesettings label:last-child { float: right; }\n',
+		 '.dice img { filter: drop-shadow(8px 8px 10px gray); }\n'
 		   ])).
 
 %%	script//
@@ -176,15 +223,21 @@ script -->
 	js_script({|javascript(WebSocketURL)||
 function handleInput(e) {
   if ( !e ) e = window.event;  // IE
-  if ( e.keyCode == 13 ) {
-    var msg = document.getElementById("input").value;
-    var pool = document.getElementById("pool").value;
-    var hunger = document.getElementById("hunger").value;
 
-    sendChat(JSON.stringify({pool:pool, hunger:hunger, reason:msg}));
-    document.getElementById("input").value = "";
+  var username = document.getElementById("char-name").value;
+  var index = parseInt(e.target.attributes['data-index'].value);
+  var reason = username + " rolls for " +
+	     document.getElementById("reason"+index).value;
+
+  if( username != "" && document.getElementById("reason"+index).value != ""){
+      var pool = document.getElementById("pool"+index).value;
+      var hunger = document.getElementById("hunger").value;
+
+      sendChat(JSON.stringify({pool:pool, hunger:hunger, reason:reason}));
+  } else {
+	alert("Must enter your name (and have a reason) to roll");
+    }
   }
-}
 
 var connection;
 
@@ -256,7 +309,9 @@ handle_message(Message, Room) :-
 	debug(chat, 'dict is ~w', [Dict]),
 	number_string(PoolCount, Dict.pool),
 	number_string(HungerCount, Dict.hunger),
-	roll_dice(PoolCount, HungerCount, Result),
+	BlackCount is max(0, PoolCount - HungerCount),
+	RolledHungerCount is min(HungerCount, PoolCount),
+	roll_dice(BlackCount, RolledHungerCount, Result),
 	dice_roll_html(Result, Dict.reason, HTML),
 	assertz(utterance(HTML)),
 	atom_json_dict(NewData, Dict.put(_{html:HTML}), []),
@@ -291,14 +346,15 @@ rolls_termerized_html(Rolls, Reason, div([
 roll_roll_image(ImageName, img(src(ImageURI), [])) :-
 	format(atom(ImageURI), 'https://partyserver.rocks/anniepoo/diceroller/~w', [ImageName]).
 
-roll_dice(Pool, Hunger, Result) :-
-	length(PoolRolls, Pool),
+
+roll_dice(Black, Hunger, Result) :-
+	length(BlackRolls, Black),
 	poolsides(PoolSides),
-	maplist({PoolSides}/[Roll]>>random_member(Roll, PoolSides), PoolRolls),
+	maplist({PoolSides}/[Roll]>>random_member(Roll, PoolSides), BlackRolls),
 	length(HungerRolls, Hunger),
 	hungersides(HungerSides),
 	maplist({HungerSides}/[Roll]>>random_member(Roll, HungerSides), HungerRolls),
-	append(PoolRolls, HungerRolls, Result).
+	append(BlackRolls, HungerRolls, Result).
 
 poolsides([
     'bestial-fail.png',
