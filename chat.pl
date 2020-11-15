@@ -68,6 +68,15 @@ fairly straighforward:
 */
 
 
+start :-
+	server,
+	edit,
+	debug(chat),
+	debug(websocket),
+	debug(websocket(open)),
+	debug(websocket(close)),
+	debug(hub(_)).
+
 %%	server is det.
 %%	server(?Port) is det.
 %
@@ -75,7 +84,7 @@ fairly straighforward:
 %	3050.
 
 server :-
-	server(3050).
+	server(8050).
 
 server(Port) :-
 	(   debugging(chat),
@@ -246,7 +255,7 @@ function openWebSocket() {
 			     ['chat']);
 
   connection.onerror = function (error) {
-    console.log('WebSocket Error ' + error);
+    console.log('WebSocket Error ' + JSON.stringify(error));
   };
 
   connection.onmessage = function (e) {
@@ -283,12 +292,16 @@ accept_chat(WebSocket) :-
 %	Create our actual chat room.
 
 :- dynamic
-	utterance/1,			% messages
+	utterance/1,			% messages (dicts)
 	visitor/1.			% joined visitors
 
 create_chat_room :-
 	hub_create(chat, Room, _{}),
-	thread_create(chatroom(Room), _, [alias(chatroom)]).
+	thread_create(chatroom(Room), _, [alias(chatroom), at_exit(report_exit)]).
+
+
+report_exit :-
+	debug(chat, 'thread has exited', []).
 
 %%	chatroom(+Room)
 %
@@ -313,9 +326,10 @@ handle_message(Message, Room) :-
 	RolledHungerCount is min(HungerCount, PoolCount),
 	roll_dice(BlackCount, RolledHungerCount, Result),
 	dice_roll_html(Result, Dict.reason, HTML),
-	assertz(utterance(HTML)),
-	atom_json_dict(NewData, Dict.put(_{html:HTML}), []),
-	hub_broadcast(Room.name, Message.put(_{data: NewData})).
+	atom_json_dict(NewData, Dict.put(_{html:HTML}), [value_string_as(atom)]),
+	ReplyMessage = Message.put(_{data: NewData}),
+	assertz(utterance(ReplyMessage)),
+	hub_broadcast(Room.name, ReplyMessage).
 handle_message(Message, _Room) :-
 	hub{joined:Id} :< Message, !,
 	assertz(visitor(Id)),
